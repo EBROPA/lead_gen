@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Generation System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .score-bar { transition: width 0.3s ease-in-out; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen" x-data="leadApp()">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <span class="text-xl font-bold text-indigo-600">Lead Gen System</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button @click="currentTab = 'dashboard'"
+                            :class="currentTab === 'dashboard' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'"
+                            class="px-3 py-2 font-medium">
+                        Dashboard
+                    </button>
+                    <button @click="currentTab = 'leads'"
+                            :class="currentTab === 'leads' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'"
+                            class="px-3 py-2 font-medium">
+                        Leads
+                    </button>
+                    <button @click="currentTab = 'sources'"
+                            :class="currentTab === 'sources' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'"
+                            class="px-3 py-2 font-medium">
+                        Sources
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 px-4">
+        <!-- Dashboard Tab -->
+        <div x-show="currentTab === 'dashboard'" x-cloak>
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="text-gray-500 text-sm">Total Leads</div>
+                    <div class="text-3xl font-bold text-gray-800" x-text="stats.total || 0"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="text-gray-500 text-sm">Hot Leads</div>
+                    <div class="text-3xl font-bold text-green-600" x-text="stats.hot_leads || 0"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="text-gray-500 text-sm">Avg Score</div>
+                    <div class="text-3xl font-bold text-indigo-600" x-text="(stats.average_score || 0).toFixed(1)"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="text-gray-500 text-sm">With Contact</div>
+                    <div class="text-3xl font-bold text-blue-600" x-text="stats.with_contact || 0"></div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="bg-white rounded-lg shadow p-6 mb-8">
+                <h2 class="text-lg font-semibold mb-4">Quick Actions</h2>
+                <div class="flex flex-wrap gap-4">
+                    <button @click="runSearch()"
+                            :disabled="searchRunning"
+                            class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                        <span x-show="!searchRunning">Run Search</span>
+                        <span x-show="searchRunning">Searching...</span>
+                    </button>
+                    <button @click="qualifyAll()"
+                            :disabled="qualifyRunning"
+                            class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
+                        <span x-show="!qualifyRunning">Qualify All New</span>
+                        <span x-show="qualifyRunning">Qualifying...</span>
+                    </button>
+                    <button @click="analyzeWebsites()"
+                            :disabled="analyzeRunning"
+                            class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                        <span x-show="!analyzeRunning">Analyze Websites</span>
+                        <span x-show="analyzeRunning">Analyzing...</span>
+                    </button>
+                </div>
+                <div x-show="actionMessage" class="mt-4 p-3 rounded-lg"
+                     :class="actionSuccess ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'"
+                     x-text="actionMessage"></div>
+            </div>
+
+            <!-- Hot Leads -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b">
+                    <h2 class="text-lg font-semibold">Hot Leads</h2>
+                </div>
+                <div class="divide-y">
+                    <template x-for="lead in hotLeads" :key="lead.id">
+                        <div class="p-4 hover:bg-gray-50 cursor-pointer" @click="showLead(lead)">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="font-medium" x-text="lead.name"></div>
+                                    <div class="text-sm text-gray-500" x-text="lead.company_name || lead.original_request?.substring(0, 80) + '...'"></div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-lg font-bold text-green-600" x-text="(lead.qualification_score || 0).toFixed(0) + '%'"></div>
+                                    <div class="text-xs text-gray-400" x-text="lead.industry || 'Unknown'"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="hotLeads.length === 0" class="p-8 text-center text-gray-500">
+                        No hot leads yet. Run a search to find leads!
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leads Tab -->
+        <div x-show="currentTab === 'leads'" x-cloak>
+            <!-- Filters -->
+            <div class="bg-white rounded-lg shadow p-4 mb-6">
+                <div class="flex flex-wrap gap-4 items-center">
+                    <select x-model="filters.status" @change="loadLeads()"
+                            class="border rounded-lg px-3 py-2">
+                        <option value="">All Statuses</option>
+                        <option value="new">New</option>
+                        <option value="qualified">Qualified</option>
+                        <option value="contacted">Contacted</option>
+                        <option value="disqualified">Disqualified</option>
+                    </select>
+                    <input type="text" x-model="filters.search" @input.debounce.300ms="loadLeads()"
+                           placeholder="Search leads..."
+                           class="border rounded-lg px-3 py-2 w-64">
+                    <input type="number" x-model="filters.minScore" @change="loadLeads()"
+                           placeholder="Min Score"
+                           class="border rounded-lg px-3 py-2 w-32">
+                </div>
+            </div>
+
+            <!-- Leads List -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <template x-for="lead in leads" :key="lead.id">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4">
+                                        <div class="font-medium" x-text="lead.name"></div>
+                                        <div class="text-sm text-gray-500" x-text="lead.company_name"></div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div x-show="lead.email" class="text-sm">
+                                            <span class="text-gray-400">Email:</span> <span x-text="lead.email"></span>
+                                        </div>
+                                        <div x-show="lead.telegram" class="text-sm">
+                                            <span class="text-gray-400">TG:</span> <span x-text="lead.telegram"></span>
+                                        </div>
+                                        <div x-show="lead.phone" class="text-sm">
+                                            <span class="text-gray-400">Phone:</span> <span x-text="lead.phone"></span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center">
+                                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                                <div class="score-bar h-2 rounded-full"
+                                                     :class="lead.qualification_score >= 70 ? 'bg-green-500' : lead.qualification_score >= 50 ? 'bg-yellow-500' : 'bg-red-500'"
+                                                     :style="'width: ' + (lead.qualification_score || 0) + '%'"></div>
+                                            </div>
+                                            <span class="text-sm font-medium" x-text="(lead.qualification_score || 0).toFixed(0) + '%'"></span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-2 py-1 text-xs rounded-full"
+                                              :class="{
+                                                  'bg-green-100 text-green-800': lead.status === 'qualified',
+                                                  'bg-blue-100 text-blue-800': lead.status === 'new',
+                                                  'bg-yellow-100 text-yellow-800': lead.status === 'contacted',
+                                                  'bg-red-100 text-red-800': lead.status === 'disqualified'
+                                              }"
+                                              x-text="lead.status"></span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex space-x-2">
+                                            <button @click="showLead(lead)"
+                                                    class="text-indigo-600 hover:text-indigo-800">View</button>
+                                            <button @click="generateProposal(lead.id)"
+                                                    class="text-green-600 hover:text-green-800">Proposal</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="px-6 py-4 border-t flex justify-between items-center">
+                    <div class="text-sm text-gray-500">
+                        Showing <span x-text="leads.length"></span> of <span x-text="pagination.total"></span> leads
+                    </div>
+                    <div class="flex space-x-2">
+                        <button @click="pagination.page--; loadLeads()"
+                                :disabled="pagination.page <= 1"
+                                class="px-3 py-1 border rounded disabled:opacity-50">Prev</button>
+                        <span class="px-3 py-1" x-text="pagination.page + ' / ' + pagination.pages"></span>
+                        <button @click="pagination.page++; loadLeads()"
+                                :disabled="pagination.page >= pagination.pages"
+                                class="px-3 py-1 border rounded disabled:opacity-50">Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sources Tab -->
+        <div x-show="currentTab === 'sources'" x-cloak>
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b flex justify-between items-center">
+                    <h2 class="text-lg font-semibold">Lead Sources</h2>
+                    <button @click="showAddSource = true"
+                            class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
+                        Add Source
+                    </button>
+                </div>
+                <div class="divide-y">
+                    <template x-for="source in sources" :key="source.id">
+                        <div class="p-4 hover:bg-gray-50">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <div class="font-medium" x-text="source.name"></div>
+                                    <div class="text-sm text-gray-500" x-text="source.source_type"></div>
+                                </div>
+                                <div class="flex items-center space-x-4">
+                                    <div class="text-right">
+                                        <div class="text-lg font-bold" x-text="source.total_leads_found"></div>
+                                        <div class="text-xs text-gray-500">leads found</div>
+                                    </div>
+                                    <button @click="toggleSource(source.id)"
+                                            :class="source.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
+                                            class="px-3 py-1 rounded-full text-sm">
+                                        <span x-text="source.is_active ? 'Active' : 'Inactive'"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="sources.length === 0" class="p-8 text-center text-gray-500">
+                        No sources configured. Add a source to start finding leads!
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Lead Detail Modal -->
+    <div x-show="selectedLead" x-cloak
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+         @click.self="selectedLead = null">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto m-4">
+            <div class="p-6 border-b flex justify-between items-center">
+                <h2 class="text-xl font-semibold" x-text="selectedLead?.name"></h2>
+                <button @click="selectedLead = null" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Score Section -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-sm text-gray-500 mb-2">Qualification Score</div>
+                    <div class="flex items-center">
+                        <div class="w-full bg-gray-200 rounded-full h-4 mr-4">
+                            <div class="score-bar h-4 rounded-full"
+                                 :class="selectedLead?.qualification_score >= 70 ? 'bg-green-500' : selectedLead?.qualification_score >= 50 ? 'bg-yellow-500' : 'bg-red-500'"
+                                 :style="'width: ' + (selectedLead?.qualification_score || 0) + '%'"></div>
+                        </div>
+                        <span class="text-2xl font-bold" x-text="(selectedLead?.qualification_score || 0).toFixed(0) + '%'"></span>
+                    </div>
+                </div>
+
+                <!-- Contact Info -->
+                <div>
+                    <h3 class="font-medium mb-2">Contact Information</h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div x-show="selectedLead?.email">
+                            <span class="text-gray-500">Email:</span>
+                            <span x-text="selectedLead?.email"></span>
+                        </div>
+                        <div x-show="selectedLead?.phone">
+                            <span class="text-gray-500">Phone:</span>
+                            <span x-text="selectedLead?.phone"></span>
+                        </div>
+                        <div x-show="selectedLead?.telegram">
+                            <span class="text-gray-500">Telegram:</span>
+                            <span x-text="selectedLead?.telegram"></span>
+                        </div>
+                        <div x-show="selectedLead?.website">
+                            <span class="text-gray-500">Website:</span>
+                            <a :href="selectedLead?.website" target="_blank" class="text-indigo-600 hover:underline" x-text="selectedLead?.website"></a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Original Request -->
+                <div x-show="selectedLead?.original_request">
+                    <h3 class="font-medium mb-2">Original Request</h3>
+                    <div class="bg-gray-50 rounded-lg p-4 text-sm" x-text="selectedLead?.original_request"></div>
+                </div>
+
+                <!-- Website Analysis -->
+                <div x-show="selectedLead?.website_analysis">
+                    <h3 class="font-medium mb-2">Website Analysis</h3>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-sm text-gray-500">Overall Score:</span>
+                            <span class="font-bold" x-text="(selectedLead?.website_analysis?.overall_score || 0).toFixed(0) + '/100'"></span>
+                        </div>
+                        <div x-show="selectedLead?.website_analysis?.issues?.length">
+                            <div class="text-sm text-gray-500 mb-1">Issues Found:</div>
+                            <ul class="text-sm space-y-1">
+                                <template x-for="issue in selectedLead?.website_analysis?.issues?.slice(0, 3)">
+                                    <li class="flex items-center">
+                                        <span class="w-2 h-2 rounded-full mr-2"
+                                              :class="issue.severity === 'critical' ? 'bg-red-500' : issue.severity === 'high' ? 'bg-orange-500' : 'bg-yellow-500'"></span>
+                                        <span x-text="issue.description"></span>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Qualification Notes -->
+                <div x-show="selectedLead?.qualification_notes">
+                    <h3 class="font-medium mb-2">Qualification Notes</h3>
+                    <div class="bg-gray-50 rounded-lg p-4 text-sm whitespace-pre-line" x-text="selectedLead?.qualification_notes"></div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex space-x-4">
+                    <button @click="generateProposal(selectedLead?.id); selectedLead = null"
+                            class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
+                        Generate Proposal
+                    </button>
+                    <button @click="qualifyLead(selectedLead?.id)"
+                            class="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                        Re-qualify
+                    </button>
+                    <select x-model="selectedLead.status" @change="updateLeadStatus(selectedLead)"
+                            class="flex-1 border rounded-lg px-4 py-2">
+                        <option value="new">New</option>
+                        <option value="qualified">Qualified</option>
+                        <option value="contacted">Contacted</option>
+                        <option value="negotiating">Negotiating</option>
+                        <option value="won">Won</option>
+                        <option value="lost">Lost</option>
+                        <option value="disqualified">Disqualified</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Proposal Modal -->
+    <div x-show="proposalModal" x-cloak
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+         @click.self="proposalModal = null">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto m-4">
+            <div class="p-6 border-b flex justify-between items-center">
+                <h2 class="text-xl font-semibold">Generated Proposal</h2>
+                <button @click="proposalModal = null" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <div x-show="proposalModal?.subject" class="mb-4">
+                    <div class="text-sm text-gray-500">Subject:</div>
+                    <div class="font-medium" x-text="proposalModal?.subject"></div>
+                </div>
+                <div class="mb-4">
+                    <div class="text-sm text-gray-500 mb-2">Content:</div>
+                    <div class="bg-gray-50 rounded-lg p-4 whitespace-pre-line text-sm" x-text="proposalModal?.content"></div>
+                </div>
+                <div class="flex space-x-4">
+                    <button @click="copyProposal()"
+                            class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
+                        Copy to Clipboard
+                    </button>
+                    <button @click="proposalModal = null"
+                            class="flex-1 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function leadApp() {
+            return {
+                currentTab: 'dashboard',
+                stats: {},
+                hotLeads: [],
+                leads: [],
+                sources: [],
+                pagination: { page: 1, per_page: 20, total: 0, pages: 1 },
+                filters: { status: '', search: '', minScore: null },
+                selectedLead: null,
+                proposalModal: null,
+                showAddSource: false,
+                searchRunning: false,
+                qualifyRunning: false,
+                analyzeRunning: false,
+                actionMessage: '',
+                actionSuccess: true,
+
+                async init() {
+                    await this.loadStats();
+                    await this.loadHotLeads();
+                    await this.loadLeads();
+                    await this.loadSources();
+                },
+
+                async loadStats() {
+                    try {
+                        const response = await fetch('/api/leads/stats');
+                        this.stats = await response.json();
+                    } catch (e) {
+                        console.error('Failed to load stats:', e);
+                    }
+                },
+
+                async loadHotLeads() {
+                    try {
+                        const response = await fetch('/api/leads/hot?limit=10');
+                        this.hotLeads = await response.json();
+                    } catch (e) {
+                        console.error('Failed to load hot leads:', e);
+                    }
+                },
+
+                async loadLeads() {
+                    try {
+                        const params = new URLSearchParams({
+                            page: this.pagination.page,
+                            per_page: this.pagination.per_page,
+                        });
+                        if (this.filters.status) params.append('status', this.filters.status);
+                        if (this.filters.search) params.append('search', this.filters.search);
+                        if (this.filters.minScore) params.append('min_score', this.filters.minScore);
+
+                        const response = await fetch(`/api/leads?${params}`);
+                        const data = await response.json();
+                        this.leads = data.items;
+                        this.pagination.total = data.total;
+                        this.pagination.pages = data.pages;
+                    } catch (e) {
+                        console.error('Failed to load leads:', e);
+                    }
+                },
+
+                async loadSources() {
+                    try {
+                        const response = await fetch('/api/sources?active_only=false');
+                        this.sources = await response.json();
+                    } catch (e) {
+                        console.error('Failed to load sources:', e);
+                    }
+                },
+
+                showLead(lead) {
+                    this.selectedLead = {...lead};
+                },
+
+                async runSearch() {
+                    this.searchRunning = true;
+                    this.actionMessage = '';
+                    try {
+                        const response = await fetch('/api/search/run', { method: 'POST' });
+                        const result = await response.json();
+                        this.actionMessage = `Search completed! Found ${result.total_found} new leads.`;
+                        this.actionSuccess = true;
+                        await this.loadStats();
+                        await this.loadHotLeads();
+                        await this.loadLeads();
+                    } catch (e) {
+                        this.actionMessage = 'Search failed: ' + e.message;
+                        this.actionSuccess = false;
+                    }
+                    this.searchRunning = false;
+                },
+
+                async qualifyAll() {
+                    this.qualifyRunning = true;
+                    this.actionMessage = '';
+                    try {
+                        const response = await fetch('/api/leads/qualify-all', { method: 'POST' });
+                        const result = await response.json();
+                        this.actionMessage = `Qualified ${result.qualified} leads, ${result.disqualified} disqualified.`;
+                        this.actionSuccess = true;
+                        await this.loadStats();
+                        await this.loadHotLeads();
+                        await this.loadLeads();
+                    } catch (e) {
+                        this.actionMessage = 'Qualification failed: ' + e.message;
+                        this.actionSuccess = false;
+                    }
+                    this.qualifyRunning = false;
+                },
+
+                async analyzeWebsites() {
+                    this.analyzeRunning = true;
+                    this.actionMessage = '';
+                    try {
+                        const response = await fetch('/api/leads/analyze-all-websites', { method: 'POST' });
+                        const result = await response.json();
+                        this.actionMessage = `Analyzed ${result.analyzed} websites.`;
+                        this.actionSuccess = true;
+                        await this.loadLeads();
+                    } catch (e) {
+                        this.actionMessage = 'Analysis failed: ' + e.message;
+                        this.actionSuccess = false;
+                    }
+                    this.analyzeRunning = false;
+                },
+
+                async qualifyLead(leadId) {
+                    try {
+                        const response = await fetch(`/api/leads/${leadId}/qualify`, { method: 'POST' });
+                        const lead = await response.json();
+                        this.selectedLead = lead;
+                        await this.loadLeads();
+                    } catch (e) {
+                        alert('Failed to qualify lead');
+                    }
+                },
+
+                async updateLeadStatus(lead) {
+                    try {
+                        await fetch(`/api/leads/${lead.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: lead.status })
+                        });
+                        await this.loadLeads();
+                    } catch (e) {
+                        alert('Failed to update lead');
+                    }
+                },
+
+                async generateProposal(leadId) {
+                    try {
+                        const response = await fetch('/api/proposals/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ lead_id: leadId, channel: 'email' })
+                        });
+                        const proposal = await response.json();
+                        this.proposalModal = proposal;
+                    } catch (e) {
+                        alert('Failed to generate proposal');
+                    }
+                },
+
+                async toggleSource(sourceId) {
+                    try {
+                        await fetch(`/api/sources/${sourceId}/toggle`, { method: 'POST' });
+                        await this.loadSources();
+                    } catch (e) {
+                        alert('Failed to toggle source');
+                    }
+                },
+
+                copyProposal() {
+                    const text = this.proposalModal?.subject
+                        ? `Subject: ${this.proposalModal.subject}\n\n${this.proposalModal.content}`
+                        : this.proposalModal?.content;
+                    navigator.clipboard.writeText(text);
+                    alert('Copied to clipboard!');
+                }
+            }
+        }
+    </script>
+</body>
+</html>
