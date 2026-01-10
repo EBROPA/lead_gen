@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Lead, LeadStatus, WebsiteAnalysis
-from app.config import settings
+from app.services.ai_provider import ai_service
 
 
 class LeadQualifierService:
@@ -84,10 +84,9 @@ class LeadQualifierService:
         r"(?:адалт|adult|porn|xxx)",
     ]
 
-    def __init__(self, db: AsyncSession, openai_client=None):
+    def __init__(self, db: AsyncSession):
         """Initialize the qualifier service."""
         self.db = db
-        self.openai_client = openai_client
 
     def detect_industry(self, text: str) -> Optional[str]:
         """Detect industry from text."""
@@ -285,7 +284,8 @@ class LeadQualifierService:
 
     async def qualify_lead_with_ai(self, lead_id: int) -> Lead:
         """Qualify lead using AI for more nuanced analysis."""
-        if not self.openai_client or not settings.openai_api_key:
+        # Check if any AI provider is available
+        if not ai_service.is_available():
             # Fallback to rule-based qualification
             return await self.qualify_lead(lead_id)
 
@@ -318,14 +318,14 @@ class LeadQualifierService:
 Данные о лиде:
 {json.dumps(context, ensure_ascii=False, indent=2)}
 
-Ответь в формате JSON:
+Ответь ТОЛЬКО валидным JSON (без markdown, без ```):
 {{
     "industry": "отрасль бизнеса",
-    "budget_score": 0-100,
-    "urgency_score": 0-100,
-    "fit_score": 0-100,
-    "is_spam": true/false,
-    "spam_reason": "причина если спам",
+    "budget_score": число от 0 до 100,
+    "urgency_score": число от 0 до 100,
+    "fit_score": число от 0 до 100,
+    "is_spam": true или false,
+    "spam_reason": "причина если спам или null",
     "project_type": "тип проекта (лендинг, корпоративный сайт, интернет-магазин, etc)",
     "estimated_budget_range": "примерный диапазон бюджета",
     "key_needs": ["потребность1", "потребность2"],
@@ -335,21 +335,20 @@ class LeadQualifierService:
 Оценивай строго:
 - budget_score: 0-30 для маленьких бюджетов, 30-60 для средних, 60-100 для больших
 - urgency_score: выше если есть срочность
-- fit_score: насколько этот лид подходит как клиент для веб-студии
-"""
+- fit_score: насколько этот лид подходит как клиент для веб-студии"""
+
+        system_prompt = "Ты - эксперт по квалификации лидов для веб-студии. Отвечай ТОЛЬКО валидным JSON без каких-либо дополнительных символов или текста."
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model=settings.openai_model,
-                messages=[
-                    {"role": "system", "content": "Ты - эксперт по квалификации лидов для веб-студии. Отвечай только валидным JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=500,
+            ai_result = await ai_service.generate_json(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                fallback_value=None,
             )
 
-            ai_result = json.loads(response.choices[0].message.content)
+            if not ai_result:
+                # AI failed, fallback to rule-based
+                return await self.qualify_lead(lead_id)
 
             # Check for spam
             if ai_result.get("is_spam"):
@@ -361,9 +360,9 @@ class LeadQualifierService:
 
             # Update lead with AI analysis
             lead.industry = ai_result.get("industry")
-            lead.budget_score = ai_result.get("budget_score", 50)
-            lead.urgency_score = ai_result.get("urgency_score", 50)
-            lead.fit_score = ai_result.get("fit_score", 50)
+            lead.budget_score = float(ai_result.get("budget_score", 50))
+            lead.urgency_score = float(ai_result.get("urgency_score", 50))
+            lead.fit_score = float(ai_result.get("fit_score", 50))
 
             # Calculate overall score
             lead.qualification_score = (

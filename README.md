@@ -56,8 +56,9 @@ lead_gen/
 2. **WebsiteAnalyzer** - анализ сайтов клиентов
 3. **LeadQualifier** - квалификация и скоринг лидов
 4. **ProposalGenerator** - генерация персонализированных предложений
-5. **REST API** - FastAPI endpoints
-6. **Web UI** - интерфейс управления
+5. **AIService** - унифицированный сервис для работы с бесплатными AI провайдерами (Gemini, Groq, OpenRouter, Ollama)
+6. **REST API** - FastAPI endpoints
+7. **Web UI** - интерфейс управления
 
 ## Быстрый старт
 
@@ -119,14 +120,42 @@ docker-compose logs -f
 # База данных
 DATABASE_URL=sqlite+aiosqlite:///./lead_gen.db
 
-# OpenAI API (для AI-квалификации и генерации)
-OPENAI_API_KEY=sk-your-api-key
-OPENAI_MODEL=gpt-4-turbo-preview
+# ========== AI ПРОВАЙДЕРЫ (бесплатные) ==========
+# Выберите один или несколько. Система автоматически использует доступный.
+
+# Google Gemini (РЕКОМЕНДУЕТСЯ - 60 запросов/мин бесплатно)
+# Получить ключ: https://aistudio.google.com/app/apikey
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-1.5-flash
+
+# Groq (ОЧЕНЬ БЫСТРЫЙ - щедрый бесплатный tier)
+# Получить ключ: https://console.groq.com/keys
+GROQ_API_KEY=your-groq-api-key
+GROQ_MODEL=llama-3.1-8b-instant
+
+# OpenRouter (МНОГО МОДЕЛЕЙ - $5 бесплатно при регистрации)
+# Получить ключ: https://openrouter.ai/keys
+OPENROUTER_API_KEY=your-openrouter-api-key
+OPENROUTER_MODEL=meta-llama/llama-3.1-8b-instruct:free
+
+# Ollama (ЛОКАЛЬНО - полностью бесплатно)
+# Установка: https://ollama.ai
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1
 
 # Настройки поиска
 SEARCH_INTERVAL_MINUTES=60
 MAX_LEADS_PER_SEARCH=50
 ```
+
+### Получение бесплатных API ключей
+
+| Провайдер | Лимиты | Как получить |
+|-----------|--------|--------------|
+| **Google Gemini** | 60 req/min | [aistudio.google.com](https://aistudio.google.com/app/apikey) - войти через Google |
+| **Groq** | 30 req/min | [console.groq.com](https://console.groq.com/keys) - регистрация |
+| **OpenRouter** | $5 кредит | [openrouter.ai](https://openrouter.ai/keys) - регистрация |
+| **Ollama** | Безлимит | [ollama.ai](https://ollama.ai) - установить локально |
 
 ## API
 

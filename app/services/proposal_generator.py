@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Lead, Proposal, ProposalStatus, ProposalChannel, WebsiteAnalysis
-from app.config import settings
+from app.services.ai_provider import ai_service
 
 
 class ProposalGeneratorService:
@@ -122,10 +122,9 @@ class ProposalGeneratorService:
 """,
     }
 
-    def __init__(self, db: AsyncSession, openai_client=None):
+    def __init__(self, db: AsyncSession):
         """Initialize the proposal generator service."""
         self.db = db
-        self.openai_client = openai_client
         self.sender_name = "Ваш веб-разработчик"
         self.sender_company = ""
         self.sender_contacts = ""
@@ -363,7 +362,8 @@ class ProposalGeneratorService:
         custom_instructions: Optional[str] = None,
     ) -> Proposal:
         """Generate a proposal using AI for more personalized content."""
-        if not self.openai_client or not settings.openai_api_key:
+        # Check if any AI provider is available
+        if not ai_service.is_available():
             # Fallback to template-based generation
             return await self.generate_proposal(lead_id, channel, tone)
 
@@ -423,7 +423,7 @@ class ProposalGeneratorService:
 - Добавь призыв к действию
 {f'- Дополнительные инструкции: {custom_instructions}' if custom_instructions else ''}
 
-Ответь в формате JSON:
+Ответь ТОЛЬКО в формате JSON (без markdown, без ```):
 {{
     "subject": "тема письма (только для email)",
     "content": "текст предложения",
@@ -432,18 +432,18 @@ class ProposalGeneratorService:
 }}
 """
 
+        system_prompt = "Ты - опытный менеджер по продажам веб-студии. Создаёшь персонализированные, убедительные предложения. Отвечай ТОЛЬКО валидным JSON."
+
         try:
-            response = await self.openai_client.chat.completions.create(
-                model=settings.openai_model,
-                messages=[
-                    {"role": "system", "content": "Ты - опытный менеджер по продажам веб-студии. Создаёшь персонализированные, убедительные предложения."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=1000,
+            ai_result = await ai_service.generate_json(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                fallback_value=None,
             )
 
-            ai_result = json.loads(response.choices[0].message.content)
+            if not ai_result:
+                # AI failed, fallback to template
+                return await self.generate_proposal(lead_id, channel, tone)
 
             proposal = Proposal(
                 lead_id=lead_id,

@@ -16,9 +16,8 @@ beautifulsoup4==4.12.3
 lxml==5.1.0
 fake-useragent==1.4.0
 
-# AI & NLP
-openai==1.12.0
-tiktoken==0.6.0
+# AI Providers (бесплатные альтернативы)
+google-generativeai==0.8.0  # Google Gemini API
 
 # Validation & Settings
 pydantic==2.6.0
